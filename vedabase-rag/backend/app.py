@@ -122,7 +122,7 @@ class Index:
         top = top[np.argsort(-scores[top])]
         return [int(i) for i in top if scores[i] > 0], sims
 
-    def direct_refs(self, q):
+    def direct_refs(self, q, books=()):
         """Resolve explicit verse references like 'Bg 2.13', 'SB 1.2.6', 'CC Madhya 20.108'."""
         out = []
         for m in REF_RE.finditer(q):
@@ -130,6 +130,8 @@ class Index:
             book = book.lower().replace(".", "")
             code = {"bg": "bg", "gita": "bg", "sb": "sb", "bhag": "sb", "cc": "cc", "iso": "iso",
                     "isopanisad": "iso", "noi": "noi"}[book]
+            if books and code not in books:
+                continue
             nums = [x for x in (a, b, c) if x]
             key = "/".join(([lila.lower()] if lila and code == "cc" else []) + nums)
             row = self.db().execute(
@@ -143,7 +145,7 @@ class Index:
         kw, terms = self.keyword_search(q, books) if mode != "semantic" else ([], self.keyword_search(q, [], 1)[1])
         vec, sims = self.vector_search(q, books) if mode != "keyword" else ([], None)
         kw_set, vec_set = set(kw), set(vec)
-        direct = self.direct_refs(q)
+        direct = self.direct_refs(q, books)
         fused = {}
         for weight, ranked in ((1.0, kw), (1.2, vec)):
             for rank, cid in enumerate(ranked):

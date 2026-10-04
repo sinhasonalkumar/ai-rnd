@@ -153,9 +153,9 @@ export default function App() {
               placeholder="Ask a question, e.g. “What is the nature of the soul?” or look up “Bg 2.13”"
             />
             {state.phase === 'answering' || state.phase === 'searching' ? (
-              <button type="button" className="go stop" onClick={stop}>Stop</button>
+              <button key="stop" type="button" className="go stop" onClick={(e) => { e.preventDefault(); stop() }}>Stop</button>
             ) : (
-              <button className="go" disabled={!query.trim()}>{mode === 'ask' ? 'Ask' : 'Search'}</button>
+              <button key="submit" type="submit" className="go" disabled={!query.trim()}>{mode === 'ask' ? 'Ask' : 'Search'}</button>
             )}
           </div>
           <Filters books={books} selected={selected} setSelected={setSelected} k={k} setK={setK}
