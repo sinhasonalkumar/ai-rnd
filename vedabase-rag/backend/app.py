@@ -57,7 +57,7 @@ class Index:
     def db(self):
         conn = getattr(self.local, "conn", None)
         if conn is None:
-            conn = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True, check_same_thread=False)
+            conn = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True, check_same_thread=False, timeout=30)
             conn.row_factory = sqlite3.Row
             self.local.conn = conn
         return conn

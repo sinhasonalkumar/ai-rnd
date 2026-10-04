@@ -75,7 +75,7 @@ def embed_text(ref, chapter, section, text):
 def build_embeddings():
     from fastembed import TextEmbedding
 
-    db = sqlite3.connect(DB_PATH)
+    db = sqlite3.connect(DB_PATH, timeout=120)
     meta = dict(db.execute("SELECT key, value FROM meta"))
     if meta.get("embed_model") != EMBED_MODEL:
         print(f"[embed] model changed ({meta.get('embed_model')} -> {EMBED_MODEL}); restarting embeddings")
