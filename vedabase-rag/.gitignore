@@ -1,0 +1,15 @@
+.venv/
+models/
+index/
+raw/
+frontend/node_modules/
+frontend/dist/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+/raw
+/models
+/.venv
+/index
+frontend/node_modules
