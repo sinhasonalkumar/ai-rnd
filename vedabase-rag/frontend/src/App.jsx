@@ -3,6 +3,7 @@ import { ask, getJSON, searchRefs } from './api'
 import { Answer } from './text'
 import Filters from './Filters'
 import ReferenceCard from './ReferenceCard'
+import Pipeline from './Pipeline'
 import Reader from './Reader'
 
 const EXAMPLES = [
@@ -23,6 +24,7 @@ export default function App() {
   const [query, setQuery] = useState('')
   const [mode, setMode] = useState('search')
   const [retrieval, setRetrieval] = useState('semantic')
+  const [rerank, setRerank] = useState(true)
   const [k, setK] = useState(12)
   const [model, setModel] = useState('')
   const [state, setState] = useState({ phase: 'idle' })
@@ -55,8 +57,8 @@ export default function App() {
     if (mode === 'search' || !status?.ollama) {
       setState({ phase: 'searching', q })
       try {
-        const res = await searchRefs(q, selected, k, retrieval)
-        setState({ phase: 'done', q, results: res.results, terms: res.terms, answer: '', tookMs: res.took_ms,
+        const res = await searchRefs(q, selected, k, retrieval, rerank)
+        setState({ phase: 'done', q, results: res.results, terms: res.terms, pipeline: res.pipeline, answer: '', tookMs: res.took_ms,
           note: mode === 'ask' ? 'Local LLM (Ollama) is not running — showing references only.' : null })
       } catch (e) {
         setState({ phase: 'error', q, error: String(e) })
@@ -67,9 +69,9 @@ export default function App() {
     let answer = ''
     try {
       await ask({
-        q, books: selected, k, model, mode: retrieval, signal: ctrl.signal,
+        q, books: selected, k, model, mode: retrieval, rerank, signal: ctrl.signal,
         on: {
-          sources: (d) => setState({ phase: 'answering', q, results: d.results, terms: d.terms, contextCount: d.context_count, answer: '' }),
+          sources: (d) => setState({ phase: 'answering', q, results: d.results, terms: d.terms, pipeline: d.pipeline, contextCount: d.context_count, answer: '' }),
           token: (d) => {
             answer += d.t
             setState((s) => ({ ...s, answer }))
@@ -113,9 +115,10 @@ export default function App() {
         <div className="status">
           {status ? (
             <>
-              <span className="pill" title="Passages indexed for keyword search">{status.chunks.toLocaleString()} passages</span>
-              <span className={`pill ${semanticPct < 100 ? 'warn' : 'ok'}`} title={`Semantic embeddings (${status.embed_model})`}>
-                semantic {semanticPct}%
+              <span className="pill" title={`Hierarchical chunking: ${status.sections?.toLocaleString()} parent sections (≤${status.chunking?.parent_tokens} tokens) → ${status.chunks.toLocaleString()} child chunks (~${status.chunking?.child_tokens} tokens, ${status.chunking?.child_overlap} overlap)`}>{status.chunks.toLocaleString()} chunks</span>
+              <span className={`pill ${semanticPct < 100 ? 'warn' : 'ok'}`}
+                title={`${status.vector_db} · collection ${status.collection} · ${status.embedded.toLocaleString()} vectors (${status.embed_model})`}>
+                Qdrant · semantic {semanticPct}%
               </span>
               <span className={`pill ${status.ollama ? 'ok' : 'off'}`} title="Local LLM via Ollama">
                 {status.ollama ? `LLM: ${model || 'no model pulled'}` : 'LLM offline'}
@@ -143,6 +146,10 @@ export default function App() {
             {[['semantic', 'Semantic (vector)'], ['hybrid', 'Hybrid'], ['keyword', 'Keyword']].map(([key, label]) => (
               <button type="button" key={key} className={retrieval === key ? 'on' : ''} onClick={() => setRetrieval(key)}>{label}</button>
             ))}
+          </div>
+          <div className="modes retrieval" title={status?.reranker ? `Cross-encoder: ${status.reranker}` : 'Reranker disabled on the server'}>
+            <button type="button" className={rerank && status?.reranker ? 'on' : ''} disabled={!status?.reranker}
+              onClick={() => setRerank((v) => !v)}>Rerank {rerank && status?.reranker ? 'on' : 'off'}</button>
           </div>
           <div className="inputrow">
             <svg viewBox="0 0 24 24" className="icon"><path d="M15.5 14h-.79l-.28-.27A6.5 6.5 0 1 0 9.5 16a6.47 6.47 0 0 0 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" /></svg>
@@ -200,7 +207,8 @@ export default function App() {
           {results.length > 0 && (
             <section className="refs" ref={refsEl}>
               <div className="refs-head">
-                <h2>References <span className="count">{results.length}</span> <span className="muted">{{ semantic: 'by vector similarity', hybrid: 'vector + keyword (RRF)', keyword: 'by BM25 keyword match' }[retrieval]}</span></h2>
+                <h2>References <span className="count">{results.length}</span> <span className="muted">{{ semantic: 'by vector similarity', hybrid: 'vector + keyword (RRF)', keyword: 'by BM25 keyword match' }[retrieval]}{state.pipeline?.reranker ? ', cross-encoder reranked' : ''}</span></h2>
+                <Pipeline p={state.pipeline} />
                 <div className="groups">
                   {grouped.map(([title, n]) => (
                     <span key={title} className="chip">{title} · {n}</span>
@@ -209,7 +217,7 @@ export default function App() {
               </div>
               {results.map((r, i) => (
                 <ReferenceCard key={r.doc_id} n={i + 1} r={r} terms={state.terms} active={activeRef === i + 1}
-                  usedInAnswer={mode === 'ask' && i < (state.contextCount || 0)} onOpen={() => setReader({ id: r.doc_id, passages: r.passages })}
+                  usedInAnswer={mode === 'ask' && i < (state.contextCount || 0)} reranked={!!state.pipeline?.reranker} onOpen={() => setReader({ id: r.doc_id, passages: r.passages })}
                   sourceLabel={SOURCE_LABEL[r.source]} />
               ))}
             </section>

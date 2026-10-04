@@ -161,3 +161,18 @@ mark { background: #ffe2a8; color: inherit; padding: 0 1px; border-radius: 2px; 
 .match { font-size: 11px; padding: 1px 7px; border-radius: 5px; background: #f2ebe0; }
 .match.semantic, .match.both { background: #efe9fb; color: #5a3fa0; }
 .match.keyword { background: #e8f0f8; color: var(--blue); }
+
+.pipeline { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; color: var(--muted); margin: 4px 0 8px; }
+.pipeline .stage { background: #fff; border: 1px solid #eadfcd; border-radius: 99px; padding: 2px 10px; }
+.pipeline .stage b { color: #5c4c3c; }
+.pipeline .stage small { margin-left: 5px; color: #a0907c; }
+.pipeline .arrow { margin-right: 6px; color: var(--saffron); }
+.sim.rr .bar span { background: linear-gradient(90deg, #9ad0a8, #2f8a54); }
+.ref-actions button.on { background: #fff3e6; border-color: var(--saffron); }
+.inspect { margin-top: 10px; border-top: 1px dashed #eadfcd; padding-top: 10px; font-size: 13px; }
+.inspect table { border-collapse: collapse; width: 100%; }
+.inspect th { text-align: left; font-weight: 600; color: var(--muted); padding: 3px 8px 3px 0; white-space: nowrap; }
+.inspect td { padding: 3px 14px 3px 0; font-variant-numeric: tabular-nums; }
+.inspect details { margin-top: 8px; }
+.inspect summary { cursor: pointer; color: var(--blue); }
+.inspect .parent-text { white-space: pre-wrap; font-family: Georgia, serif; font-size: 14px; line-height: 1.6; max-height: 320px; overflow: auto; background: #fbf8f3; padding: 10px 12px; border-radius: 8px; }

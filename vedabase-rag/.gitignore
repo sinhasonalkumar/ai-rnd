@@ -8,3 +8,8 @@ __pycache__/
 *.pyc
 .env
 .DS_Store
+/raw
+/models
+/.venv
+/index
+frontend/node_modules

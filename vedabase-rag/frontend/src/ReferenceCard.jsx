@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { getJSON } from './api'
 import { Highlight } from './text'
 
 const SECTION = { translation: 'Translation', purport: 'Purport' }
@@ -9,9 +10,19 @@ function citation(r) {
   return `${r.book_title}: ${r.ref}`
 }
 
-export default function ReferenceCard({ n, r, terms, active, usedInAnswer, onOpen, sourceLabel }) {
+export default function ReferenceCard({ n, r, terms, active, usedInAnswer, onOpen, sourceLabel, reranked }) {
   const [copied, setCopied] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const [inspect, setInspect] = useState(false)
+  const [parent, setParent] = useState(null)
+  const toggleInspect = async () => {
+    setInspect((v) => !v)
+    if (!parent) {
+      try { setParent(await getJSON(`/api/chunk/${r.passages[0].chunk_id}`)) } catch { setParent({ error: true }) }
+    }
+  }
+  const s = r.scores || {}
+  const fmt = (v, d = 3) => (v == null ? '—' : typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(d) : String(v))
   const copy = async () => {
     const p = r.passages[0]
     const text = `“${p.text}”\n— ${citation(r)}`
@@ -42,6 +53,12 @@ export default function ReferenceCard({ n, r, terms, active, usedInAnswer, onOpe
           </div>
         </div>
         <div className="scores">
+          {reranked && r.rerank != null && (
+            <span className="sim rr" title="Cross-encoder relevance (0–1) — final ranking">
+              <span className="bar"><span style={{ width: `${r.rerank * 100}%` }} /></span>
+              rerank {r.rerank.toFixed(2)}
+            </span>
+          )}
           {r.similarity != null && (
             <span className="sim" title="Cosine similarity between your query and this passage embedding">
               <span className="bar"><span style={{ width: `${Math.max(0, Math.min(1, (r.similarity - 0.5) / 0.4)) * 100}%` }} /></span>
@@ -65,7 +82,27 @@ export default function ReferenceCard({ n, r, terms, active, usedInAnswer, onOpe
           <button onClick={() => setExpanded((e) => !e)}>{expanded ? 'Fewer passages' : `+${r.passages.length - 1} more passage`}</button>
         )}
         <button onClick={copy}>{copied ? 'Copied ✓' : 'Copy quote + reference'}</button>
+        <button onClick={toggleInspect} className={inspect ? 'on' : ''}>{inspect ? 'Hide pipeline' : 'Inspect pipeline'}</button>
       </div>
+      {inspect && (
+        <div className="inspect">
+          <table>
+            <tbody>
+              <tr><th>BM25 rank</th><td>{fmt(s.bm25_rank)}</td><th>Vector rank</th><td>{fmt(s.vector_rank)}</td></tr>
+              <tr><th>Cosine similarity</th><td>{fmt(s.similarity)}</td><th>RRF score</th><td>{fmt(s.rrf, 5)}</td></tr>
+              <tr><th>Rerank (cross-encoder)</th><td>{fmt(s.rerank)}</td><th>Final score</th><td>{fmt(r.score)}</td></tr>
+              <tr><th>Matched child chunk</th><td>#{r.passages[0].chunk_id} · {r.passages[0].tokens} tokens</td>
+                <th>Parent section</th><td>#{r.passages[0].parent_id} · {r.passages[0].parent_tokens} tokens{parent?.siblings ? ` · ${parent.siblings.length} children` : ''}</td></tr>
+            </tbody>
+          </table>
+          {parent?.parent_text && (
+            <details>
+              <summary>Parent context sent to the LLM (small-to-big)</summary>
+              <p className="parent-text"><Highlight text={parent.parent_text} terms={terms} /></p>
+            </details>
+          )}
+        </div>
+      )}
     </article>
   )
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start the app at http://localhost:8000 (macOS / Linux).
-# If embeddings are unfinished, embedding resumes in the background (progress: index/embed.log).
+# If embeddings are unfinished, the server keeps embedding in the background (progress: index/embed.log).
 set -euo pipefail
 cd "$(dirname "$0")"
 [ -x .venv/bin/python ] && [ -f index/vedabase.sqlite ] || { echo "Run ./setup.sh first."; exit 1; }
@@ -13,18 +13,9 @@ if command -v ollama >/dev/null 2>&1 && ! curl -sf "${OLLAMA_URL:-http://127.0.0
 fi
 
 cd backend
-if ! ../.venv/bin/python - <<'PY'
-import sqlite3, sys
-from config import DB_PATH, EMBED_MODEL
-m = dict(sqlite3.connect(DB_PATH).execute("select key, value from meta"))
-sys.exit(0 if m.get("embed_model") == EMBED_MODEL and m.get("embedded_upto") == m.get("chunk_count") else 1)
-PY
-then
-  if ! pgrep -f "python indexer.py" >/dev/null 2>&1; then
-    echo "Embeddings incomplete - resuming in background (tail -f index/embed.log)"
-    nohup ../.venv/bin/python indexer.py >> ../index/embed.log 2>&1 &
-  fi
-fi
+# Rebuild the keyword/chunk index if it is missing or from an older version (vector embedding then
+# continues inside the server in the background; progress: index/embed.log and the header "semantic N%").
+../.venv/bin/python -c "import indexer, sys; sys.exit(1 if indexer.needs_rebuild() else 0)" || ../.venv/bin/python indexer.py --no-embed
 
 URL="http://localhost:$PORT"
 echo "Vedabase RAG running at $URL  (Ctrl+C to stop)"

@@ -4,13 +4,13 @@ import json
 import re
 from pathlib import Path
 
+# Documents are yielded with their top-level sections; chunking.HierarchicalChunker splits those
+# into parent blocks and token-sized child chunks.
+
 TAG_RE = re.compile(r"<[^>]+>")
 BR_RE = re.compile(r"<br\s*/?>", re.I)
 WS_RE = re.compile(r"[ \t\u00a0]+")
-SENT_RE = re.compile(r"(?<=[.!?\"”])\s+(?=[A-Z“\"(\[])")
 
-CHUNK_TARGET = 1100
-CHUNK_MAX = 1600
 
 
 def clean(s: str) -> str:
@@ -29,44 +29,6 @@ def load_jsonp(path: Path):
     return json.loads(s)
 
 
-def split_long(par: str):
-    if len(par) <= CHUNK_MAX:
-        return [par]
-    out, cur = [], ""
-    for sent in SENT_RE.split(par):
-        if cur and len(cur) + len(sent) + 1 > CHUNK_TARGET:
-            out.append(cur)
-            cur = sent
-        else:
-            cur = f"{cur} {sent}".strip()
-        while len(cur) > CHUNK_MAX:
-            out.append(cur[:CHUNK_TARGET])
-            cur = cur[CHUNK_TARGET:]
-    if cur:
-        out.append(cur)
-    return out
-
-
-def chunk_paragraphs(paragraphs):
-    """Greedily pack paragraphs into ~CHUNK_TARGET-char chunks."""
-    pieces = [p for par in paragraphs if par.strip() for p in split_long(par.strip())]
-    chunks, cur = [], []
-    size = 0
-    for p in pieces:
-        if cur and size + len(p) > CHUNK_TARGET:
-            chunks.append("\n\n".join(cur))
-            cur, size = [], 0
-        cur.append(p)
-        size += len(p) + 2
-    if cur:
-        tail = "\n\n".join(cur)
-        if chunks and len(tail) < 250 and len(chunks[-1]) + len(tail) < CHUNK_MAX:
-            chunks[-1] += "\n\n" + tail
-        else:
-            chunks.append(tail)
-    return chunks
-
-
 def chapter_title_lookup(book_meta):
     """Map toc keys to titles, including nested canto/section chapters."""
     titles = {}
@@ -78,7 +40,7 @@ def chapter_title_lookup(book_meta):
 
 
 def iter_corpus(raw_dir: Path):
-    """Yield (doc, chunks) where doc is a dict and chunks is a list of (section, text)."""
+    """Yield (doc, sections) where doc is a dict and sections is a list of (section_name, text)."""
     index = json.loads((raw_dir / "index.json").read_text(encoding="utf-8"))
     books = index["books"]
     data_dir = raw_dir / "data"
@@ -117,13 +79,9 @@ def iter_corpus(raw_dir: Path):
                         "purport": purport,
                     },
                 }
-                chunks = []
-                if translation:
-                    chunks.append(("translation", translation))
-                for c in chunk_paragraphs(purport.split("\n\n") if purport else []):
-                    chunks.append(("purport", c))
-                if chunks:
-                    yield doc, chunks
+                sections = [(name, txt) for name, txt in (("translation", translation), ("purport", purport)) if txt]
+                if sections:
+                    yield doc, sections
         elif "chapters" in data:
             for key, langs in data["chapters"].items():
                 en = langs.get("en") or {}
@@ -143,9 +101,8 @@ def iter_corpus(raw_dir: Path):
                     "content": {"blocks": paras},
                 }
                 texts = [p["text"] for p in paras if p["type"] != "heading"]
-                chunks = [("text", c) for c in chunk_paragraphs(texts)]
-                if chunks:
-                    yield doc, chunks
+                if texts:
+                    yield doc, [("text", "\n\n".join(texts))]
 
     for kind, fname, label in (
         ("letter", "letters", "Letters"),
@@ -170,9 +127,9 @@ def iter_corpus(raw_dir: Path):
                 "location": it.get("location", ""),
                 "content": {"text": content},
             }
-            chunks = [("text", c) for c in chunk_paragraphs(content.split("\n\n"))]
-            if chunks:
-                yield doc, chunks
+            text = clean(content) if "<" in content else content.strip()
+            if text:
+                yield doc, [("text", text)]
 
 
 def book_list(raw_dir: Path):

@@ -4,18 +4,18 @@ export async function getJSON(url) {
   return r.json()
 }
 
-export function searchRefs(q, books, k, mode) {
-  const p = new URLSearchParams({ q, k: String(k), mode })
+export function searchRefs(q, books, k, mode, rerank) {
+  const p = new URLSearchParams({ q, k: String(k), mode, rerank: String(rerank) })
   if (books.length) p.set('books', books.join(','))
   return getJSON(`/api/search?${p}`)
 }
 
 /** POST /api/ask and dispatch server-sent events to handlers. */
-export async function ask({ q, books, k, model, mode, signal, on }) {
+export async function ask({ q, books, k, model, mode, rerank, signal, on }) {
   const r = await fetch('/api/ask', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ q, books, k, model, mode }),
+    body: JSON.stringify({ q, books, k, model, mode, rerank }),
     signal,
   })
   if (!r.ok || !r.body) throw new Error(`${r.status} ${r.statusText}`)
